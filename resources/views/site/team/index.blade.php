@@ -9,21 +9,46 @@
     ['label' => 'Team'],
   ];
 
+
   $resolveImg = function ($path) {
     if (!$path) return null;
 
-    $path = trim($path);
-    if (preg_match('~^https?://~i', $path)) return $path;
+    $path = trim((string) $path);
 
+    // Absolute URL
+    if (preg_match('~^https?://~i', $path)) {
+      return $path;
+    }
+
+    // Normalize slashes
     $clean = ltrim($path, '/');
 
+    // Already a public storage URL/path
+    // e.g. "storage/team/john.jpg"
     if (str_starts_with($clean, 'storage/')) {
       return asset($clean);
     }
 
+    // Common public web paths (theme/assets/uploads/etc.)
+    // e.g. "assets/img/...", "uploads/team/..."
+    if (
+      str_starts_with($clean, 'assets/') ||
+      str_starts_with($clean, 'uploads/') ||
+      str_starts_with($clean, 'public/')
+    ) {
+      return asset($clean);
+    }
+
+    // If file physically exists under /public, serve as public asset
+    if (file_exists(public_path($clean))) {
+      return asset($clean);
+    }
+
+    // Otherwise assume it's a path stored on the public disk (DB value like "team/john.jpg")
     try {
       return Storage::disk('public')->url($clean);
     } catch (\Throwable $e) {
+      // Final fallback
       return asset($clean);
     }
   };
@@ -175,6 +200,7 @@
 
   <style>
     /* ---------- Shared card shell ---------- */
+    
     #about-team .ac-team-card,
     #about-team .ac-partner-card{
       height:100%;
