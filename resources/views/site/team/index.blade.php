@@ -1,4 +1,6 @@
 @php
+  use Illuminate\Support\Facades\Storage;
+
   $pageTitle = 'Team';
   $crumbTitle = 'Team';
   $crumbItems = [
@@ -6,18 +8,37 @@
     ['label' => 'About', 'url' => route('site.about')],
     ['label' => 'Team'],
   ];
+
+  $resolveImg = function ($path) {
+    if (!$path) return null;
+
+    $path = trim($path);
+    if (preg_match('~^https?://~i', $path)) return $path;
+
+    $clean = ltrim($path, '/');
+
+    if (str_starts_with($clean, 'storage/')) {
+      return asset($clean);
+    }
+
+    try {
+      return Storage::disk('public')->url($clean);
+    } catch (\Throwable $e) {
+      return asset($clean);
+    }
+  };
 @endphp
 
 @include('site.headers.head', ['title' => $pageTitle])
 @include('site.headers.pg-crumb', ['title' => $crumbTitle, 'items' => $crumbItems])
 
-<section class="vc_row wpb_row vc_row-fluid vc-zozo-section typo-default" style="padding:55px 0; background:#fafafa;">
+<section id="about-team" class="vc_row wpb_row vc_row-fluid vc-zozo-section typo-default" style="padding:55px 0; background:#fafafa;">
   <div class="zozo-vc-main-row-inner vc-normal-section">
     <div class="container">
 
       <div class="zozo-parallax-header">
         <div class="parallax-header content-style-default">
-          <h2 class="parallax-title">Our Team & Partners</h2>
+          <h2 class="parallax-title">Our Team &amp; Partners</h2>
           <div class="parallax-desc default-style" style="max-width:820px;">
             Meet the people and organizations supporting AfriChild’s mission.
           </div>
@@ -25,7 +46,14 @@
       </div>
 
       @foreach($typeOrder as $typeKey)
-        @php $group = ($teamByType->get($typeKey, collect()))->values(); @endphp
+        @php
+          $group = ($teamByType->get($typeKey, collect()))->values();
+
+          $isPeopleGroup = in_array($typeKey, [
+            \App\Models\TeamMember::TYPE_BOARD,
+            \App\Models\TeamMember::TYPE_SECRETARIAT,
+          ], true);
+        @endphp
 
         @if($group->count() > 0)
           <div class="ac-team-group" style="margin-top:34px;">
@@ -53,54 +81,50 @@
               @endif
             </div>
 
-            {{-- PEOPLE (Board / Secretariat) --}}
-            @if($typeKey === \App\Models\TeamMember::TYPE_BOARD || $typeKey === \App\Models\TeamMember::TYPE_SECRETARIAT)
-
-              {{-- Use Bootstrap gutters for consistent spacing --}}
-              <div class="row g-4 ac-grid">
+            @if($isPeopleGroup)
+              {{-- PEOPLE GRID (equal-height cards, no row break issues from long names/roles) --}}
+              <div class="row g-4 ac-people-grid">
                 @foreach($group as $m)
                   @php
-                    // If your photos are stored in public/storage, switch to: Storage::url($m->photo)
-                    $photoUrl = $m->photo ? asset(ltrim($m->photo,'/')) : null;
+                    $photoUrl = $resolveImg($m->photo ?? null);
+                    $hasAnySocial = filled($m->facebook) || filled($m->twitter) || filled($m->linkedin) || filled($m->instagram);
                   @endphp
 
-                  {{-- d-flex makes the card stretch equal height --}}
-                  <div class="col-lg-3 col-md-4 col-sm-6 col-xs-12 d-flex">
+                  <div class="col-xl-3 col-lg-3 col-md-4 col-sm-6 col-12 d-flex">
                     <article class="ac-team-card w-100">
                       <div class="ac-team-photo">
                         @if($photoUrl)
                           <img loading="lazy" decoding="async" src="{{ $photoUrl }}" alt="{{ $m->name }}">
                         @else
-                          <div class="ac-photo-fallback">{{ $m->name }}</div>
+                          <div class="ac-photo-fallback">
+                            <div class="ac-fallback-initial">
+                              {{ strtoupper(mb_substr(trim($m->name), 0, 1)) }}
+                            </div>
+                          </div>
                         @endif
                       </div>
 
                       <div class="ac-team-body">
-                        <div class="ac-team-name">{{ $m->name }}</div>
+                        <div class="ac-team-name" title="{{ $m->name }}">{{ $m->name }}</div>
+
                         @if($m->designation)
-                          <div class="ac-team-role">{{ $m->designation }}</div>
+                          <div class="ac-team-role" title="{{ $m->designation }}">{{ $m->designation }}</div>
+                        @else
+                          <div class="ac-team-role ac-empty-role" aria-hidden="true">&nbsp;</div>
                         @endif
 
-                        <div class="ac-team-social">
+                        <div class="ac-team-social {{ $hasAnySocial ? '' : 'is-empty' }}">
                           @if($m->facebook)
-                            <a href="{{ $m->facebook }}" target="_blank" rel="noopener" aria-label="Facebook">
-                              <i class="fa-brands fa-facebook-f"></i>
-                            </a>
+                            <a href="{{ $m->facebook }}" target="_blank" rel="noopener" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
                           @endif
                           @if($m->twitter)
-                            <a href="{{ $m->twitter }}" target="_blank" rel="noopener" aria-label="X/Twitter">
-                              <i class="fa-brands fa-x-twitter"></i>
-                            </a>
+                            <a href="{{ $m->twitter }}" target="_blank" rel="noopener" aria-label="X/Twitter"><i class="fa-brands fa-x-twitter"></i></a>
                           @endif
                           @if($m->linkedin)
-                            <a href="{{ $m->linkedin }}" target="_blank" rel="noopener" aria-label="LinkedIn">
-                              <i class="fa-brands fa-linkedin-in"></i>
-                            </a>
+                            <a href="{{ $m->linkedin }}" target="_blank" rel="noopener" aria-label="LinkedIn"><i class="fa-brands fa-linkedin-in"></i></a>
                           @endif
                           @if($m->instagram)
-                            <a href="{{ $m->instagram }}" target="_blank" rel="noopener" aria-label="Instagram">
-                              <i class="fa-brands fa-instagram"></i>
-                            </a>
+                            <a href="{{ $m->instagram }}" target="_blank" rel="noopener" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
                           @endif
                         </div>
                       </div>
@@ -108,18 +132,16 @@
                   </div>
                 @endforeach
               </div>
-
             @else
-            {{-- PARTNERS (logos) --}}
-
-              <div class="row g-4 ac-grid">
+              {{-- PARTNERS GRID --}}
+              <div class="row g-4 ac-partner-grid">
                 @foreach($group as $m)
                   @php
-                    $logoUrl = $m->photo ? asset(ltrim($m->photo,'/')) : null;
+                    $logoUrl = $resolveImg($m->photo ?? null);
                     $link = $m->linkedin ?: ($m->facebook ?: ($m->twitter ?: ($m->instagram ?: null)));
                   @endphp
 
-                  <div class="col-lg-3 col-md-4 col-sm-6 col-xs-12 d-flex">
+                  <div class="col-xl-3 col-lg-3 col-md-4 col-sm-6 col-12 d-flex">
                     <div class="ac-partner-card w-100">
                       @if($link)
                         <a href="{{ $link }}" target="_blank" rel="noopener" class="ac-partner-link" aria-label="{{ $m->name }}">
@@ -142,7 +164,6 @@
                   </div>
                 @endforeach
               </div>
-
             @endif
 
           </div>
@@ -151,52 +172,200 @@
 
     </div>
   </div>
+
+  <style>
+    /* ---------- Shared card shell ---------- */
+    #about-team .ac-team-card,
+    #about-team .ac-partner-card{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      background:#fff;
+      border:1px solid rgba(0,0,0,.06);
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow:0 6px 18px rgba(0,0,0,.06);
+    }
+
+    /* ---------- Team photo ---------- */
+    #about-team .ac-team-photo{
+      height:260px;
+      background:#f2f2f2;
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex:0 0 auto;
+    }
+
+    #about-team .ac-team-photo img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      object-position:center;
+      display:block;
+    }
+
+    #about-team .ac-photo-fallback{
+      width:100%;
+      height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:linear-gradient(180deg,#f5f5f5,#ececec);
+    }
+
+    #about-team .ac-fallback-initial{
+      width:84px;
+      height:84px;
+      border-radius:999px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:32px;
+      font-weight:900;
+      background:rgba(0,0,0,.07);
+      color:rgba(0,0,0,.55);
+    }
+
+    /* ---------- Team body (fixed rhythm) ---------- */
+    #about-team .ac-team-body{
+      padding:14px 12px 16px;
+      text-align:center;
+      background:#eee;
+      display:flex;
+      flex-direction:column;
+      flex:1 1 auto;
+      min-height:170px; /* keeps bottom alignment stable */
+    }
+
+    /* Clamp LONG NAMES (main issue) */
+    #about-team .ac-team-name{
+      font-weight:800;
+      line-height:1.25;
+      margin-bottom:6px;
+      color:#243746;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+
+      display:-webkit-box;
+      -webkit-box-orient:vertical;
+      -webkit-line-clamp:2;  /* max 2 lines */
+      overflow:hidden;
+      min-height:calc(1.25em * 2); /* reserve 2 lines on all cards */
+    }
+
+    /* Clamp roles too */
+    #about-team .ac-team-role{
+      opacity:.82;
+      line-height:1.35;
+      margin-bottom:12px;
+      color:#5f6f7c;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+
+      display:-webkit-box;
+      -webkit-box-orient:vertical;
+      -webkit-line-clamp:2;  /* max 2 lines */
+      overflow:hidden;
+      min-height:calc(1.35em * 2); /* reserve 2 lines */
+    }
+
+    #about-team .ac-team-role.ac-empty-role{
+      visibility:hidden;
+    }
+
+    /* Reserve social row height even if empty */
+    #about-team .ac-team-social{
+      margin-top:auto;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+      min-height:40px; /* keeps card bottoms aligned */
+    }
+
+    #about-team .ac-team-social.is-empty{
+      visibility:hidden;
+    }
+
+    #about-team .ac-team-social a{
+      width:40px;
+      height:40px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid rgba(0,0,0,.12);
+      background:rgba(255,255,255,.45);
+      text-decoration:none;
+      border-radius:10px;
+    }
+
+    /* ---------- Partner cards ---------- */
+    #about-team .ac-partner-card{
+      padding:16px 14px;
+      text-align:center;
+    }
+
+    #about-team .ac-partner-link{
+      color:inherit;
+      text-decoration:none;
+      display:flex;
+      flex-direction:column;
+      height:100%;
+    }
+
+    #about-team .ac-partner-logo{
+      height:90px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#f7f7f7;
+      border-radius:12px;
+      overflow:hidden;
+      margin-bottom:10px;
+      padding:8px;
+      flex:0 0 auto;
+    }
+
+    #about-team .ac-partner-logo img{
+      max-height:74px;
+      max-width:100%;
+      object-fit:contain;
+      display:block;
+    }
+
+    #about-team .ac-partner-fallback{
+      font-weight:800;
+      padding:8px;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
+
+    #about-team .ac-partner-name{
+      font-weight:800;
+      margin-top:6px;
+      line-height:1.2;
+      flex:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
+
+    /* ---------- Defensive spacing ---------- */
+    #about-team .ac-team-group + .ac-team-group{
+      border-top:1px solid rgba(0,0,0,.04);
+      padding-top:8px;
+    }
+
+    @media (max-width: 575.98px){
+      #about-team .ac-team-photo{ height:240px; }
+      #about-team .ac-team-body{ min-height:160px; padding:12px 10px 14px; }
+    }
+  </style>
 </section>
-
-<style>
- /* Make body a flex column so we can push socials to bottom */
-#about-team .ac-team-body{
-  padding: 14px 12px 16px;
-  text-align:center;
-  background:#eee;
-  display:flex;
-  flex-direction:column;
-  height: 170px;          /* <-- keeps card bottom consistent; adjust if needed */
-}
-
-/* Name can wrap but keep it tight */
-#about-team .ac-team-name{
-  font-weight:800;
-  margin-bottom:6px;
-  line-height:1.2;
-}
-
-/* Clamp designation to 2 lines to keep equal heights */
-#about-team .ac-team-role{
-  opacity:.8;
-  margin-bottom:12px;
-  line-height:1.3;
-
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;  /* <-- max 2 lines */
-  overflow: hidden;
-  min-height: calc(1.3em * 2); /* <-- reserves space for 2 lines always */
-}
-
-/* Push social icons to bottom consistently */
-#about-team .ac-team-social{
-  margin-top:auto;        /* <-- pins to bottom */
-  display:flex;
-  justify-content:center;
-  gap:10px;
-  flex-wrap:wrap;
-}
-#about-team .ac-team-card{
-  height:100%;
-  display:flex;
-  flex-direction:column;
-}
-</style>
 
 @include('site.footers.foot')
